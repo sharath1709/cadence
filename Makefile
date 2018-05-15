@@ -50,6 +50,9 @@ TOOLS_SRC += $(TOOLS_CMD_ROOT)
 # all directories with *_test.go files in them
 TEST_DIRS := $(sort $(dir $(filter %_test.go,$(ALL_SRC))))
 
+# all directories with *_test.go files in them
+TEST_XDC_DIRS := $(sort $(dir $(filter %_failover_test.go,$(ALL_SRC))))
+
 # all tests other than integration test fall into the pkg_test category
 PKG_TEST_DIRS := $(filter-out $(INTEG_TEST_ROOT)%,$(TEST_DIRS))
 
@@ -96,6 +99,10 @@ test: vendor/glide.updated bins
 	@rm -f test.log
 	@for dir in $(TEST_DIRS); do \
 		go test -timeout 15m -race -coverprofile=$@ "$$dir" | tee -a test.log; \
+	done; \
+	# need to run xdc tests with race detector off because of ringpop bug causing data race issue
+	@for dir in $(TEST_XDC_DIRS); do \
+		go test -timeout 15m -coverprofile=$@ "$$dir" | tee -a test.log; \
 	done;
 
 cover_profile: clean bins_nothrift

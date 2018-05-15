@@ -18,12 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package host
+// +build !race
+// need to run xdc tests with race detector off because of ringpop bug causing data race issue
+
+package host2
 
 import (
+	"context"
 	"flag"
 	"os"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -38,8 +43,8 @@ import (
 	"github.com/uber/cadence/common/messaging"
 	"github.com/uber/cadence/common/persistence"
 	"github.com/uber/cadence/common/service/config"
+	"github.com/uber/cadence/host"
 	"go.uber.org/zap"
-	"time"
 )
 
 type (
@@ -55,15 +60,22 @@ type (
 
 	testCluster struct {
 		persistence.TestBase
-		host   Cadence
+		host   host.Cadence
 		engine wsc.Interface
 		logger bark.Logger
 	}
 )
 
+const (
+	testNumberOfHistoryShards = 4
+	testNumberOfHistoryHosts  = 1
+)
+
 var (
+	integration  = flag.Bool("integration2", true, "run integration tests")
 	domainName   = "integration-cross-dc-test-domain"
 	clusterName  = []string{"active", "standby"}
+	topicName    = []string{"active", "standby"}
 	clustersInfo = []*config.ClustersInfo{
 		{
 			EnableGlobalDomain:             true,
@@ -113,7 +125,7 @@ func (s *testCluster) setupCluster(no int) {
 	s.SetupWorkflowStoreWithOptions(options, metadata)
 	s.setupShards()
 	messagingClient := s.createMessagingClient()
-	s.host = NewCadence(s.ClusterMetadata, messagingClient, s.MetadataManager, s.ShardMgr, s.HistoryMgr, s.ExecutionMgrFactory, s.TaskMgr,
+	s.host = host.NewCadence(s.ClusterMetadata, messagingClient, s.MetadataManager, s.ShardMgr, s.HistoryMgr, s.ExecutionMgrFactory, s.TaskMgr,
 		s.VisibilityMgr, testNumberOfHistoryShards, testNumberOfHistoryHosts, s.logger, no, true)
 	s.host.Start()
 }
@@ -210,7 +222,6 @@ func (s *integrationClustersTestSuite) TestDomainFailover() {
 	s.NoError(err)
 	s.NotNil(resp)
 
-
 	client2 := s.cluster2.host.GetFrontendClient() // standby
 	var resp2 *workflow.DescribeDomainResponse
 	for i := 0; i < 20; i++ { // retry to wait domain been replicated to cluster2
@@ -255,4 +266,9 @@ func (s *integrationClustersTestSuite) TestDomainFailover() {
 	//s.NotNil(resp3)
 	//fmt.Println("vancexu resp3:")
 	//fmt.Println(resp3)
+}
+
+func createContext() context.Context {
+	ctx, _ := context.WithTimeout(context.Background(), 90*time.Second)
+	return ctx
 }

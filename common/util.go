@@ -181,6 +181,7 @@ func IsValidContext(ctx context.Context) error {
 	return nil
 }
 
+// GenerateRandomString is used for generate test string
 func GenerateRandomString(n int) string {
 	rand.Seed(time.Now().UnixNano())
 	letterRunes := []rune("random")
