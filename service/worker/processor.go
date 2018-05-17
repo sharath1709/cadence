@@ -175,6 +175,13 @@ func (p *replicationTaskProcessor) worker(workerWG *sync.WaitGroup) {
 
 			// TODO: We skip over any messages which cannot be deserialized.  Figure out DLQ story for corrupted messages.
 			task, err := deserialize(msg.Value())
+			print := func(value interface{}) string {
+				bytes, _ := json.MarshalIndent(value, "", "  ")
+				return string(bytes)
+			}
+			fmt.Printf("++++++++++\n")
+			fmt.Printf("## Replication Task: %v\n.", print(task))
+			fmt.Printf("++++++++++\n")
 			if err != nil {
 				err = fmt.Errorf("Deserialize Error. Value: %v, Error: %v", string(msg.Value()), err)
 			} else {
@@ -190,6 +197,7 @@ func (p *replicationTaskProcessor) worker(workerWG *sync.WaitGroup) {
 					case replicator.ReplicationTaskTypeHistory:
 					ApplyLoop:
 						for {
+							now := time.Now()
 							err = p.historyClient.ReplicateEvents(context.Background(), &h.ReplicateEventsRequest{
 								SourceCluster: common.StringPtr(p.sourceCluster),
 								DomainUUID:    task.HistoryTaskAttributes.DomainId,
@@ -204,6 +212,8 @@ func (p *replicationTaskProcessor) worker(workerWG *sync.WaitGroup) {
 								History:         task.HistoryTaskAttributes.History,
 								NewRunHistory:   task.HistoryTaskAttributes.NewRunHistory,
 							})
+							_, right := err.(*shared.EntityNotExistsError)
+							fmt.Printf("## process duration %v, %T, %#v, nil?: %v\n", time.Now().Sub(now), err, err, right)
 
 							// ReplicateEvents succeeded, break out of the loop and complete task
 							if err == nil {
